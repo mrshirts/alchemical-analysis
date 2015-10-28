@@ -260,36 +260,46 @@ def readDataGromacs(P):
       raise SystemExit("\nERROR!\nThere are more than 3 groups of files (%s, to be exact) each having different number of the dE columns; I cannot combine the data." % len(ndE_unique))
    
    lv = numpy.array(lv, float) # *** Lambda vectors.
-   K  = len(lv)                # *** Number of lambda states.
+   K  = len(lv)                # *** Number of lambda states.  # note, for expanded ensemble, this can change.
 
    #===================================================================================================
    # Preliminaries III: Count up the equilibrated snapshots.
    #===================================================================================================
    
    equiltime = P.equiltime
-   nsnapshots = numpy.zeros(K, int)
    
+   nsnapshots = None
    for nf, f in enumerate(fs):
    
       f.len_first, f.len_last = (len(line.split()) for line in unixlike.tailPy(f.filename, 2))
       bLenConsistency = (f.len_first != f.len_last)
-         
+
       if f.bExpanded:
-   
+
+         # number of files is not necessarily equal to the number of states.
          equiltime       = f.parseLog()
          equilsnapshots  = int(round(equiltime/f.snap_size))
          f.skip_lines   += equilsnapshots
-   
+
          extract_states  = numpy.genfromtxt(f.filename, dtype=int, skiprows=f.skip_lines, skip_footer=1*bLenConsistency, usecols=1)
-         nsnapshots     += numpy.array(Counter(extract_states).values())
+         current_nsnapshots = len(Counter(extract_states))
+         if nsnapshots == None:
+            nsnapshots = numpy.zeros(current_nsnapshots, int)
+            K = current_nsnapshots
+         else:
+            if len(nsnapshots) != current_nsnapshots:
+               print "Warning: number of states observed in %s (%d) does not match the number of states found in previous files (%d)" % (f.filename,current_nsnapshots,nsnapshots)
+            else:
+               nsnapshots     += numpy.array(Counter(extract_states).values())
    
       else:
+         nsnapshots = numpy.zeros(K, int)
          equilsnapshots  = int(equiltime/f.snap_size)
          f.skip_lines   += equilsnapshots
          nsnapshots[nf] += unixlike.wcPy(f.filename) - f.skip_lines - 1*bLenConsistency
    
       print "First %s ps (%s snapshots) will be discarded due to equilibration from file %s..." % (equiltime, equilsnapshots, f.filename)
-   
+
    #===================================================================================================
    # Preliminaries IV: Load in equilibrated data.
    #===================================================================================================   
