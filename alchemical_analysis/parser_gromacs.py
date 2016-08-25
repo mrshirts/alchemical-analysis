@@ -23,6 +23,7 @@ import os                       # for os interface
 import re                       # for regular expressions
 from glob import glob           # for pathname matching
 from collections import Counter # for counting elements in an array
+import pdb
 
 import unixlike                 # some implemented unixlike commands
 from utils.corruptxvg import *
@@ -76,7 +77,7 @@ def readDataGromacs(P):
                      if 'T' in elements:
                         self.temperature = elements[4]
                      continue
- 
+
                   if 'Energy' in elements:
                      self.bEnergy = True
                   if 'pV' in elements:
@@ -250,7 +251,7 @@ def readDataGromacs(P):
       else:
          lv = lv[0]
          # Handle the case when only some particular files/lambdas are given.
-         if 1 < n_files < len(lv):
+         if 1 < n_files < len(lv) and not f.bExpanded: # if it's expanded ensemble, and it has all the states, it must include all of the transitions.
             bSelective_MBAR = True
             sel_states = [f.state for f in fs]
             lv = [lv[i] for i in sel_states]
@@ -292,14 +293,14 @@ def readDataGromacs(P):
    
       f.len_first, f.len_last = (len(line.split()) for line in unixlike.tailPy(f.filename, 2))
       bLenConsistency = (f.len_first != f.len_last)
-         
+
       if f.bExpanded:
    
          equiltime       = f.parseLog()
          equilsnapshots  = int(round(equiltime/f.snap_size))
          f.skip_lines   += equilsnapshots
    
-         extract_states  = numpy.genfromtxt(f.filename, dtype=int, skiprows=f.skip_lines, skip_footer=1*bLenConsistency, usecols=1)
+         extract_states  = numpy.genfromtxt(f.filename, dtype=float, skiprows=f.skip_lines, skip_footer=1*bLenConsistency, usecols=1)
          nsnapshots[nf] += numpy.array(Counter(extract_states).values())
    
       else:
@@ -319,7 +320,7 @@ def readDataGromacs(P):
 
    nsnapshots = numpy.concatenate((numpy.zeros([1, K], int), nsnapshots))   
    for nf, f in enumerate(fs):
-      nsnapshots_l = nsnapshots[nf]
+      nsnapshots_l = nsnapshots[:nf+1, :].sum(axis=0)
       nsnapshots_r = nsnapshots[:nf+2, :].sum(axis=0)
       f.iter_loadtxt(nf)
    return nsnapshots.sum(axis=0), lv, dhdlt, u_klt
